@@ -1,0 +1,104 @@
+name: Task
+description: Nova task para o MultiAgente AI orchestrator
+title: "[PROJECTO] Título da task"
+labels: ["status:intake"]
+body:
+  - type: dropdown
+    id: project
+    attributes:
+      label: Projecto
+      description: Qual o projecto alvo desta task?
+      options:
+        - get2event
+        - capi
+        - hr
+    validations:
+      required: true
+
+  - type: dropdown
+    id: classification
+    attributes:
+      label: Classificação
+      options:
+        - routine
+        - complex
+        - critical
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Prioridade
+      options:
+        - low
+        - medium
+        - high
+        - critical
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Descrição
+      description: O que precisa de ser feito?
+      placeholder: "Descreve a task em detalhe..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: files_planned
+    attributes:
+      label: Ficheiros planeados
+      description: "Lista os ficheiros que se espera serem modificados (um por linha). Usado para scope drift detection."
+      placeholder: |
+        src/components/Foo.tsx
+        src/hooks/useFoo.ts
+        supabase/migrations/20260507_foo.sql
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: agents
+    attributes:
+      label: Agentes envolvidos
+      options:
+        - label: Claude Code (planeamento + código)
+        - label: Lovable (implementação UI + SQL)
+        - label: Perplexity (review + validação)
+
+  - type: markdown
+    id: separator
+    attributes:
+      value: |
+        ---
+        > As secções abaixo são preenchidas pelos agentes durante o workflow.
+        > **Não preencher manualmente.**
+
+  - type: textarea
+    id: plan
+    attributes:
+      label: Plano
+      description: "[Preenchido por Claude Code]"
+      placeholder: "A ser preenchido pelo Claude Code durante status:planning"
+    validations:
+      required: false
+
+  - type: textarea
+    id: sql_draft
+    attributes:
+      label: SQL Draft
+      description: "[Preenchido por Claude Code — se aplicável]"
+      placeholder: "A ser preenchido pelo Claude Code se a task envolve SQL"
+    validations:
+      required: false
+
+  - type: textarea
+    id: lovable_inbox
+    attributes:
+      label: Lovable INBOX
+      description: "[Preenchido por Claude Code — mensagem para o Lovable]"
+      placeholder: "A ser preenchido pelo Claude Code durante status:execution"
+    validations:
+      required: false

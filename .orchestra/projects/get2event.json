@@ -1,0 +1,17 @@
+{
+  "name": "get2event",
+  "github_repo": "tech2c-devteam/get2event",
+  "supabase_mode": "internal",
+  "lovable_project_id": "FILL_IN_LOVABLE_PROJECT_ID",
+  "lovable_project_url": "https://lovable.dev/projects/FILL_IN_LOVABLE_PROJECT_ID",
+  "lovable_chat_path": "lovable/chat.md",
+  "orchestra_path": ".orchestra",
+  "dispatch_enabled": false,
+  "gate_timeouts": {
+    "routine": 14400,
+    "complex": 86400,
+    "critical": 259200
+  },
+  "default_classification": "complex",
+  "active": true
+}

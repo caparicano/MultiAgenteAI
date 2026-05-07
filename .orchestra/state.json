@@ -1,0 +1,8 @@
+{
+  "_comment": "Estado activo do orquestrador. Actualizado pelo orchestrate.yml em cada transição.",
+  "active_issue": null,
+  "project": null,
+  "status": null,
+  "branch": null,
+  "last_updated": null
+}
