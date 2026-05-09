@@ -21,9 +21,6 @@ jobs:
 
       - name: Check for chat.md conflicts
         uses: actions/github-script@v7
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         with:
           script: |
             const fs = require('fs');
@@ -149,33 +146,6 @@ jobs:
                   `_Detectado por chatmd-conflict.yml. Verificar se o INBOX/OUTBOX está consistente._`
                 ].join('\n')
               });
-            }
-
-            // ─── Telegram ──────────────────────────────────────────────────────────
-            const token = process.env.TELEGRAM_BOT_TOKEN;
-            const chatId = process.env.TELEGRAM_CHAT_ID;
-            if (token && chatId) {
-              const highAlerts = alerts.filter(a => a.severity === 'high');
-              const emoji = highAlerts.length > 0 ? '🔴' : '🟡';
-
-              const text = [
-                `${emoji} *Chat.md Conflict — MultiAgente AI*`,
-                ``,
-                `Commit \`${commitSha}\` por \`${pusher}\`:`,
-                ...alerts.map(a => `• ${a.severity === 'high' ? '🔴' : '🟡'} \`${a.file}\` — ${a.conflictMsg.substring(0, 100)}`),
-                ``,
-                activeIssue ? `📋 [Issue #${activeIssue.number}](${activeIssue.html_url})` : '_Sem Issue activo encontrado_'
-              ].join('\n');
-
-              try {
-                await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown', disable_web_page_preview: true })
-                });
-              } catch (e) {
-                core.warning(`Telegram notification failed: ${e.message}`);
-              }
             }
 
             core.warning(`⚠️ ${alerts.length} chat.md conflict(s) detected`);

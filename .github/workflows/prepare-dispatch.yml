@@ -28,8 +28,6 @@ jobs:
         uses: actions/github-script@v7
         env:
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         with:
           script: |
             const issue = context.payload.issue;
@@ -224,23 +222,3 @@ jobs:
 
             // Labels
             await addLabel(approved ? 'dispatch:preflight-ok' : 'dispatch:preflight-fail');
-
-            // Telegram
-            const token = process.env.TELEGRAM_BOT_TOKEN;
-            const chatId = process.env.TELEGRAM_CHAT_ID;
-            if (token && chatId) {
-              const text = [
-                `🔍 *Pre-flight Review — MultiAgente AI*`,
-                ``,
-                `📋 [${issue.title}](${issue.html_url})`,
-                `${emoji} Score: ${score}/10 — ${approved ? 'OK para dispatch' : 'Requer revisão'}`,
-              ].join('\n');
-
-              try {
-                await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown', disable_web_page_preview: true })
-                });
-              } catch {}
-            }

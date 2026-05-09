@@ -7,7 +7,7 @@ Control plane that orchestrates collaborative workflows between AI agents (Claud
 **GitHub-first** — uses GitHub Issues as tasks, Labels as state machine, Actions as orchestration, Projects as dashboard.
 
 ```
-Luis (gates) ← Telegram / GitHub
+Luis (gates) ← GitHub Issues
        ↓
    GitHub Issues + Actions + Projects
        ↓              ↓              ↓
@@ -39,12 +39,11 @@ intake → planning → plan-review → execution → code-review → migration 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
 | `orchestrate.yml` | Issue events + comments | State machine transitions |
-| `review-perplexity.yml` | `status:planning` label | AI review via Perplexity API |
-| `notify-telegram.yml` | Called by other workflows | Telegram notifications (3x retry) |
+| `perplexity-review.yml` | `repository_dispatch` | AI review via Perplexity API |
 | `gate-timeout.yml` | Cron `*/15 * * * *` | Auto-block expired gates |
 | `chatmd-conflict.yml` | Push to `**/chat.md` | Detect lock protocol violations |
 | `ci-scope-drift.yml` | Pull requests | Compare planned vs actual files |
-| `dispatch-prepare.yml` | `/dispatch-review*` | Perplexity pre-flight (Phase 3) |
+| `prepare-dispatch.yml` | `/dispatch-review*` | Perplexity pre-flight (Phase 3) |
 
 ## Projects
 
@@ -56,10 +55,9 @@ intake → planning → plan-review → execution → code-review → migration 
 
 ## Setup
 
-1. Create Telegram bot via @BotFather
-2. Add GitHub Secrets: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `PERPLEXITY_API_KEY`
-3. Fill in `lovable_project_id` in `.orchestra/projects/*.json`
-4. Create first task via GitHub Issue template
+1. Add GitHub Secret: `PERPLEXITY_API_KEY`
+2. Fill in `lovable_project_id` in `.orchestra/projects/*.json`
+3. Create first task via GitHub Issue template
 
 ## Docs
 
