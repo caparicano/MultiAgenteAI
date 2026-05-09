@@ -1,0 +1,181 @@
+name: Chat.md Conflict Check
+
+on:
+  push:
+    paths:
+      - '**/lovable/chat.md'
+      - '**/chat.md'
+
+jobs:
+  conflict-check:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for chat.md conflicts
+        uses: actions/github-script@v7
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // ─── Encontrar todos os chat.md alterados neste push ───────────────────
+            const { execSync } = require('child_process');
+            let changedFiles = [];
+            try {
+              const diff = execSync('git diff --name-only HEAD~1 HEAD', { encoding: 'utf-8' });
+              changedFiles = diff.trim().split('\n').filter(f => f.endsWith('chat.md'));
+            } catch (e) {
+              core.warning(`git diff failed: ${e.message}`);
+              return;
+            }
+
+            if (changedFiles.length === 0) {
+              core.info('No chat.md files changed in this push');
+              return;
+            }
+
+            core.info(`chat.md files changed: ${changedFiles.join(', ')}`);
+
+            // ─── Verificar cada chat.md ────────────────────────────────────────────
+            const pusher = context.payload.pusher?.name || context.payload.sender?.login || 'unknown';
+            const commitSha = context.sha.substring(0, 7);
+            const alerts = [];
+
+            for (const file of changedFiles) {
+              const fullPath = path.join(process.cwd(), file);
+              if (!fs.existsSync(fullPath)) {
+                core.info(`File ${file} was deleted — skip`);
+                continue;
+              }
+
+              const content = fs.readFileSync(fullPath, 'utf-8');
+
+              // Extrair STATUS header
+              const statusMatch = content.match(/^## STATUS:\s*(CLEAR|INBOX_PENDING|OUTBOX_READY)/m);
+              const currentStatus = statusMatch ? statusMatch[1] : 'UNKNOWN';
+
+              // Detectar conflitos de lock
+              // Regras:
+              //   - Se STATUS é INBOX_PENDING e quem fez push é lovable → CONFLITO
+              //     (Lovable não devia alterar enquanto há INBOX pendente)
+              //   - Se STATUS é OUTBOX_READY e quem fez push NÃO é lovable → CONFLITO
+              //     (alguém sobrescreveu o OUTBOX do Lovable)
+              //   - Se STATUS é UNKNOWN → WARNING (ficheiro sem protocolo)
+
+              const isLovable = pusher.toLowerCase().includes('lovable') ||
+                                context.payload.head_commit?.message?.toLowerCase().includes('lovable');
+              const isClaude = pusher.toLowerCase().includes('claude') ||
+                               context.payload.head_commit?.message?.toLowerCase().includes('claude');
+
+              let severity = null;
+              let conflictMsg = null;
+
+              if (currentStatus === 'INBOX_PENDING' && isLovable) {
+                severity = 'high';
+                conflictMsg = `Lovable modificou \`${file}\` enquanto STATUS era INBOX_PENDING. O Lovable devia esperar pelo CLEAR.`;
+              }
+              else if (currentStatus === 'OUTBOX_READY' && !isLovable) {
+                severity = 'medium';
+                conflictMsg = `Alguém (${pusher}) sobrescreveu \`${file}\` enquanto STATUS era OUTBOX_READY. O OUTBOX do Lovable pode ter sido perdido.`;
+              }
+              else if (currentStatus === 'UNKNOWN') {
+                severity = 'low';
+                conflictMsg = `\`${file}\` não tem STATUS header válido. O protocolo de lock exige \`## STATUS: CLEAR|INBOX_PENDING|OUTBOX_READY\`.`;
+              }
+
+              if (severity) {
+                alerts.push({ file, severity, currentStatus, conflictMsg, pusher });
+              }
+            }
+
+            if (alerts.length === 0) {
+              core.info('✅ No chat.md conflicts detected');
+              return;
+            }
+
+            // ─── Reportar conflitos ────────────────────────────────────────────────
+
+            // Encontrar Issue activo para este projecto
+            // Tentar inferir projecto a partir do path do ficheiro
+            let activeIssue = null;
+            const projectMatch = changedFiles[0].match(/\.orchestra\/projects\/(\w+)/);
+
+            // Buscar Issues abertos que não estejam em done/cancelled
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 10,
+              sort: 'updated',
+              direction: 'desc'
+            });
+
+            // Encontrar Issue com status em execução
+            activeIssue = openIssues.find(i =>
+              i.labels.some(l => ['status:execution', 'status:code-review', 'status:migration'].includes(l.name))
+            );
+
+            // Postar no Issue activo se encontrado
+            if (activeIssue) {
+              const alertTable = alerts.map(a =>
+                `| ${a.severity === 'high' ? '🔴' : a.severity === 'medium' ? '🟡' : '🔵'} ${a.severity} | \`${a.file}\` | ${a.currentStatus} | ${a.conflictMsg} |`
+              ).join('\n');
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: activeIssue.number,
+                body: [
+                  `## ⚠️ Chat.md Conflict Detected`,
+                  ``,
+                  `Commit \`${commitSha}\` por \`${pusher}\` alterou ficheiro(s) chat.md com conflito de lock:`,
+                  ``,
+                  `| Severidade | Ficheiro | STATUS | Problema |`,
+                  `|-----------|---------|--------|----------|`,
+                  alertTable,
+                  ``,
+                  `---`,
+                  `_Detectado por chatmd-conflict.yml. Verificar se o INBOX/OUTBOX está consistente._`
+                ].join('\n')
+              });
+            }
+
+            // ─── Telegram ──────────────────────────────────────────────────────────
+            const token = process.env.TELEGRAM_BOT_TOKEN;
+            const chatId = process.env.TELEGRAM_CHAT_ID;
+            if (token && chatId) {
+              const highAlerts = alerts.filter(a => a.severity === 'high');
+              const emoji = highAlerts.length > 0 ? '🔴' : '🟡';
+
+              const text = [
+                `${emoji} *Chat.md Conflict — MultiAgente AI*`,
+                ``,
+                `Commit \`${commitSha}\` por \`${pusher}\`:`,
+                ...alerts.map(a => `• ${a.severity === 'high' ? '🔴' : '🟡'} \`${a.file}\` — ${a.conflictMsg.substring(0, 100)}`),
+                ``,
+                activeIssue ? `📋 [Issue #${activeIssue.number}](${activeIssue.html_url})` : '_Sem Issue activo encontrado_'
+              ].join('\n');
+
+              try {
+                await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown', disable_web_page_preview: true })
+                });
+              } catch (e) {
+                core.warning(`Telegram notification failed: ${e.message}`);
+              }
+            }
+
+            core.warning(`⚠️ ${alerts.length} chat.md conflict(s) detected`);
