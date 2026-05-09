@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
-      contents: read
+      contents: write
 
     steps:
       - name: Checkout
@@ -230,6 +230,29 @@ jobs:
                 });
               }
 
+              // /plan-ready — Claude Code sinaliza que o plano foi revisto e está pronto para review
+              else if (body.startsWith('/plan-ready')) {
+                if (currentStatus === 'status:planning') {
+                  await postComment(issueNumber, '🔄 Plano revisto — a disparar review Perplexity...');
+                  try {
+                    await github.rest.repos.createDispatchEvent({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      event_type: 'trigger-perplexity-review',
+                      client_payload: {
+                        issue_number: issueNumber,
+                        triggered_by: `/plan-ready by ${actor}`,
+                        timestamp: new Date().toISOString()
+                      }
+                    });
+                  } catch (e) {
+                    await postComment(issueNumber, `⚠️ Falha ao disparar review: ${e.message}. Usa Actions → Review Perplexity → Run workflow → Issue ${issueNumber}`);
+                  }
+                } else {
+                  await postComment(issueNumber, `⚠️ \`/plan-ready\` só é válido em \`status:planning\`. Estado actual: \`${currentStatus}\``);
+                }
+              }
+
               // /dispatch-* (Fase 3 — preparação)
               else if (body.startsWith('/dispatch-')) {
                 await handleDispatchCommand(issue, comment, body);
@@ -237,7 +260,7 @@ jobs:
 
               // Unknown command
               else if (body.startsWith('/')) {
-                const knownCommands = ['/approve', '/changes', '/migration-done', '/verify-ok', '/block', '/cancel', '/dispatch-lovable', '/dispatch-sql', '/dispatch-review', '/dispatch-abort', '/dispatch-skip'];
+                const knownCommands = ['/approve', '/changes', '/plan-ready', '/migration-done', '/verify-ok', '/block', '/cancel', '/dispatch-lovable', '/dispatch-sql', '/dispatch-review', '/dispatch-abort', '/dispatch-skip'];
                 await postComment(issueNumber,
                   `⚠️ Comando desconhecido: \`${body.split(' ')[0]}\`\n\n**Comandos disponíveis:**\n${knownCommands.map(c => `- \`${c}\``).join('\n')}`
                 );
@@ -389,11 +412,29 @@ jobs:
               await triggerTelegram(issue, 'intake', 'Nova task criada 📋 — Aguarda plano do Claude Code');
             }
 
-            // Label status:planning adicionado manualmente → nenhuma acção especial aqui
-            // O review-perplexity.yml escuta este evento e lança a review automaticamente
+            // Label status:planning adicionado → dispara review Perplexity via repository_dispatch
+            // Nota: GITHUB_TOKEN não gera novos workflow runs para issues/labeled events,
+            // mas repository_dispatch é ISENTO dessa limitação — é sempre processado.
             else if (eventName === 'issues' && action === 'labeled' &&
                      context.payload.label?.name === 'status:planning') {
-              core.info('status:planning detectado — review-perplexity.yml irá processar');
+              core.info('status:planning detectado — a disparar review-perplexity via repository_dispatch');
+              try {
+                await github.rest.repos.createDispatchEvent({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  event_type: 'trigger-perplexity-review',
+                  client_payload: {
+                    issue_number: issue.number,
+                    triggered_by: 'orchestrate.yml',
+                    timestamp: new Date().toISOString()
+                  }
+                });
+                core.info(`repository_dispatch 'trigger-perplexity-review' enviado para Issue #${issue.number}`);
+              } catch (e) {
+                core.warning(`Falha ao disparar review-perplexity: ${e.message}`);
+                // Fallback: postar comment avisando que a review deve ser disparada manualmente
+                await postComment(issue.number, '⚠️ Auto-trigger da review Perplexity falhou. Para disparar manualmente: Actions → Review Perplexity → Run workflow → Issue number: ' + issue.number);
+              }
             }
 
             // Issue fechado manualmente (sem /cancel ou /verify-ok)

@@ -28,6 +28,7 @@ intake → planning → plan-review → execution → code-review → migration 
 |---------|--------|
 | `/approve` | Approve current gate |
 | `/changes [text]` | Request changes |
+| `/plan-ready` | Signal plan revised, trigger Perplexity review |
 | `/migration-done` | Confirm SQL applied |
 | `/verify-ok` | Final verification |
 | `/block [reason]` | Block task |

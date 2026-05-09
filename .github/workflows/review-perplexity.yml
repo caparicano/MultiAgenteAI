@@ -1,13 +1,28 @@
 name: Review Perplexity
 
+# Trigger principal: repository_dispatch (imune à limitação do GITHUB_TOKEN)
+# Fallback: issues:labeled (para adições manuais de label via UI/CLI)
+# Debug: workflow_dispatch (teste manual no GitHub Actions UI)
 on:
+  repository_dispatch:
+    types: [trigger-perplexity-review]
   issues:
     types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to review'
+        required: true
+        type: number
 
 jobs:
   review:
-    # Só corre quando status:planning é adicionado
-    if: github.event.label.name == 'status:planning'
+    # Para issues:labeled, só corre quando status:planning é adicionado
+    # Para repository_dispatch e workflow_dispatch, corre sempre
+    if: |
+      github.event_name == 'repository_dispatch' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && github.event.label.name == 'status:planning')
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -25,8 +40,40 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         with:
           script: |
-            const issue = context.payload.issue;
-            const issueNumber = issue.number;
+            // ─── Resolver issue number consoante o tipo de trigger ───────────────
+            let issueNumber;
+            let issue;
+
+            if (context.eventName === 'repository_dispatch') {
+              // Trigger via orchestrate.yml → repository_dispatch
+              issueNumber = context.payload.client_payload?.issue_number;
+              if (!issueNumber) {
+                core.setFailed('repository_dispatch sem issue_number no client_payload');
+                return;
+              }
+              // Buscar issue completo via API
+              const { data } = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber
+              });
+              issue = data;
+            } else if (context.eventName === 'workflow_dispatch') {
+              // Trigger manual via GitHub Actions UI
+              issueNumber = parseInt(context.payload.inputs.issue_number, 10);
+              const { data } = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber
+              });
+              issue = data;
+            } else {
+              // Trigger via issues:labeled
+              issue = context.payload.issue;
+              issueNumber = issue.number;
+            }
+
+            core.info(`Reviewing Issue #${issueNumber}: ${issue.title}`);
 
             // ─── Helpers ───────────────────────────────────────────────────────────
             function getLabel(issue, prefix) {
