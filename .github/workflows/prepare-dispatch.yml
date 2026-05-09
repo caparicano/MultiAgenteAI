@@ -119,22 +119,28 @@ jobs:
             }
 
             // ─── Chamar Perplexity API ──────────────────────────────────────────────
-            const systemPrompt = isSqlReview
-              ? `You are a SQL security reviewer. Analyze this SQL migration for:
-1. Safety: Are there destructive operations (DROP, TRUNCATE, ALTER TABLE)?
-2. Idempotency: Can it be run twice safely (IF NOT EXISTS, etc.)?
-3. Transactional: Is it wrapped in BEGIN/COMMIT?
-4. RLS: If it creates tables, are RLS policies defined?
-5. Side effects: Could it break existing data or schemas?
+            const sqlReviewPrompt = [
+              'You are a SQL security reviewer. Analyze this SQL migration for:',
+              '1. Safety: Are there destructive operations (DROP, TRUNCATE, ALTER TABLE)?',
+              '2. Idempotency: Can it be run twice safely (IF NOT EXISTS, etc.)?',
+              '3. Transactional: Is it wrapped in BEGIN/COMMIT?',
+              '4. RLS: If it creates tables, are RLS policies defined?',
+              '5. Side effects: Could it break existing data or schemas?',
+              '',
+              'Return JSON: {"score": 1-10, "approved": true/false, "risks": ["..."], "suggestions": ["..."], "sql_safe": true/false}'
+            ].join('\n');
 
-Return JSON: {"score": 1-10, "approved": true/false, "risks": ["..."], "suggestions": ["..."], "sql_safe": true/false}`
-              : `You are a pre-flight reviewer for a dispatch operation. An AI agent is about to execute this instruction on Lovable (a code generation platform). Review for:
-1. Clarity: Will Lovable understand exactly what to do?
-2. Scope: Is the instruction well-bounded?
-3. Safety: Any risk of data loss, schema drift, or unintended changes?
-4. Completeness: Does the instruction have all needed context?
+            const dispatchReviewPrompt = [
+              'You are a pre-flight reviewer for a dispatch operation. An AI agent is about to execute this instruction on Lovable (a code generation platform). Review for:',
+              '1. Clarity: Will Lovable understand exactly what to do?',
+              '2. Scope: Is the instruction well-bounded?',
+              '3. Safety: Any risk of data loss, schema drift, or unintended changes?',
+              '4. Completeness: Does the instruction have all needed context?',
+              '',
+              'Return JSON: {"score": 1-10, "approved": true/false, "risks": ["..."], "suggestions": ["..."], "scope_assessment": "bounded|vague|risky"}'
+            ].join('\n');
 
-Return JSON: {"score": 1-10, "approved": true/false, "risks": ["..."], "suggestions": ["..."], "scope_assessment": "bounded|vague|risky"}`;
+            const systemPrompt = isSqlReview ? sqlReviewPrompt : dispatchReviewPrompt;
 
             let reviewResult = null;
             let delay = 2000;

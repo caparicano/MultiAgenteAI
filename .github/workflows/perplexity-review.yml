@@ -141,39 +141,40 @@ jobs:
 
             core.info('Calling Perplexity API...');
 
-            const systemPrompt = `You are a senior code reviewer and software architect for a multi-agent AI orchestration system.
-You are reviewing a task plan that will be implemented by AI agents (Claude Code for planning/coding, Lovable for UI implementation).
-
-Context:
-- Project: ${project}
-- Classification: ${classification}
-- Priority: ${priority}
-- The project uses Lovable with internal Supabase (no external API access to the DB)
-- SQL migrations must be applied manually by the human operator in Lovable's SQL Editor
-- The plan will be executed by AI agents, so it must be precise and unambiguous
-
-Review the plan for:
-1. **Clarity** (1-10): Is the plan clear enough for AI agents to execute without ambiguity?
-2. **Completeness** (1-10): Does it cover all edge cases, error handling, and rollback?
-3. **Safety** (1-10): Are there destructive operations? Is RLS considered? Any security risks?
-4. **Scope** (1-10): Is the scope well-bounded? Risk of scope creep?
-5. **SQL Safety** (1-10, or N/A): If SQL is involved, is it transactional? Idempotent? Safe to apply?
-
-Return your response as valid JSON with this exact structure:
-{
-  "score": <overall 1-10>,
-  "approved": <true if score >= 7>,
-  "summary": "<2-3 sentence summary>",
-  "findings": [
-    {"severity": "high|medium|low", "finding": "<description>", "suggestion": "<how to fix>"},
-    ...
-  ],
-  "clarity": <1-10>,
-  "completeness": <1-10>,
-  "safety": <1-10>,
-  "scope": <1-10>,
-  "sql_safety": <1-10 or null>
-}`;
+            const systemPrompt = [
+              'You are a senior code reviewer and software architect for a multi-agent AI orchestration system.',
+              'You are reviewing a task plan that will be implemented by AI agents (Claude Code for planning/coding, Lovable for UI implementation).',
+              '',
+              'Context:',
+              `- Project: ${project}`,
+              `- Classification: ${classification}`,
+              `- Priority: ${priority}`,
+              '- The project uses Lovable with internal Supabase (no external API access to the DB)',
+              '- SQL migrations must be applied manually by the human operator in Lovable SQL Editor',
+              '- The plan will be executed by AI agents, so it must be precise and unambiguous',
+              '',
+              'Review the plan for:',
+              '1. Clarity (1-10): Is the plan clear enough for AI agents to execute without ambiguity?',
+              '2. Completeness (1-10): Does it cover all edge cases, error handling, and rollback?',
+              '3. Safety (1-10): Are there destructive operations? Is RLS considered? Any security risks?',
+              '4. Scope (1-10): Is the scope well-bounded? Risk of scope creep?',
+              '5. SQL Safety (1-10, or N/A): If SQL is involved, is it transactional? Idempotent? Safe to apply?',
+              '',
+              'Return your response as valid JSON with this exact structure:',
+              '{',
+              '  "score": <overall 1-10>,',
+              '  "approved": <true if score >= 7>,',
+              '  "summary": "<2-3 sentence summary>",',
+              '  "findings": [',
+              '    {"severity": "high|medium|low", "finding": "<description>", "suggestion": "<how to fix>"}',
+              '  ],',
+              '  "clarity": <1-10>,',
+              '  "completeness": <1-10>,',
+              '  "safety": <1-10>,',
+              '  "scope": <1-10>,',
+              '  "sql_safety": <1-10 or null>',
+              '}'
+            ].join('\n');
 
             let reviewResult = null;
             let rawResponse = '';
