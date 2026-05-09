@@ -377,16 +377,23 @@ jobs:
 
             // ─── MAIN ROUTER ───────────────────────────────────────────────────────
 
-            // Novo Issue criado → adicionar status:intake se não tem status
+            // Novo Issue criado → garantir status:intake (template já adiciona)
             if (eventName === 'issues' && action === 'opened') {
               const labels = getLabels(issue);
               if (!labels.find(l => l.startsWith('status:'))) {
                 await addLabel(issue.number, 'status:intake');
               }
-              // Auto-transition intake → planning
-              await transitionStatus(issue.number, 'status:intake', 'status:planning', 'system',
-                '| Action | Auto-transition: nova task detectada |');
-              await triggerTelegram(issue, 'planning', 'Nova task criada 📋 — Aguarda plano do Claude Code');
+              // NÃO auto-transitar para planning — o Claude Code decide quando o
+              // plano está pronto e transita manualmente com:
+              //   gh issue edit N --remove-label status:intake --add-label status:planning
+              await triggerTelegram(issue, 'intake', 'Nova task criada 📋 — Aguarda plano do Claude Code');
+            }
+
+            // Label status:planning adicionado manualmente → nenhuma acção especial aqui
+            // O review-perplexity.yml escuta este evento e lança a review automaticamente
+            else if (eventName === 'issues' && action === 'labeled' &&
+                     context.payload.label?.name === 'status:planning') {
+              core.info('status:planning detectado — review-perplexity.yml irá processar');
             }
 
             // Issue fechado manualmente (sem /cancel ou /verify-ok)

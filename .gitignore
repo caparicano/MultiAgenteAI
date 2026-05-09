@@ -1,0 +1,18 @@
+# Claude Code scratch
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
+*.swo
+
+# Environment (if any local scripts added later)
+.env.local
+.env.*.local
+
+# Node (if scripts added later)
+node_modules/
