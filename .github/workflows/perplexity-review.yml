@@ -135,7 +135,10 @@ jobs:
             const apiKey = process.env.PERPLEXITY_API_KEY;
             if (!apiKey) {
               core.warning('PERPLEXITY_API_KEY not configured — skipping review');
-              await postComment('⚠️ **Perplexity Review skipped**: `PERPLEXITY_API_KEY` não configurada nos GitHub Secrets.');
+              await postComment('⚠️ **Perplexity Review skipped**: `PERPLEXITY_API_KEY` não configurada nos GitHub Secrets.\n\nA task avança para plan-review — Luis decide manualmente.');
+              // Transitar para plan-review mesmo sem review — Luis decide
+              await removeLabel('status:planning');
+              await addLabel('status:plan-review');
               return;
             }
 
