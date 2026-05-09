@@ -1,13 +1,12 @@
 name: Review Perplexity
 
-# Trigger principal: repository_dispatch (imune à limitação do GITHUB_TOKEN)
-# Fallback: issues:labeled (para adições manuais de label via UI/CLI)
-# Debug: workflow_dispatch (teste manual no GitHub Actions UI)
+# Trigger principal: repository_dispatch (via orchestrate.yml, imune ao GITHUB_TOKEN)
+# Manual: workflow_dispatch (teste via GitHub Actions UI)
+# NOTA: issues:labeled removido para evitar execucao dupla —
+#       orchestrate.yml ja dispara repository_dispatch quando status:planning e adicionado
 on:
   repository_dispatch:
     types: [trigger-perplexity-review]
-  issues:
-    types: [labeled]
   workflow_dispatch:
     inputs:
       issue_number:
@@ -17,12 +16,6 @@ on:
 
 jobs:
   review:
-    # Para issues:labeled, só corre quando status:planning é adicionado
-    # Para repository_dispatch e workflow_dispatch, corre sempre
-    if: |
-      github.event_name == 'repository_dispatch' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'issues' && github.event.label.name == 'status:planning')
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -68,12 +61,22 @@ jobs:
               });
               issue = data;
             } else {
-              // Trigger via issues:labeled
-              issue = context.payload.issue;
-              issueNumber = issue.number;
+              core.setFailed('Unexpected event type: ' + context.eventName);
+              return;
             }
 
             core.info(`Reviewing Issue #${issueNumber}: ${issue.title}`);
+
+            // ─── Deduplication check ──────────────────────────────────────────────
+            const currentLabels = issue.labels.map(l => l.name);
+            if (currentLabels.includes('status:plan-review')) {
+              core.info('Issue already in plan-review — skipping duplicate review');
+              return;
+            }
+            if (!currentLabels.includes('status:planning')) {
+              core.info(`Issue not in status:planning (current: ${currentLabels.filter(l => l.startsWith('status:')).join(', ')}) — skipping`);
+              return;
+            }
 
             // ─── Helpers ───────────────────────────────────────────────────────────
             function getLabel(issue, prefix) {
